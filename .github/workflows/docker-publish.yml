@@ -24,14 +24,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Ensure tool-manifest based .NET tools (if any) can restore
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: Fwda.Proxy/global.json
+
       - name: Fetch full git history
         run: |
           git fetch --prune --unshallow || true
           git fetch --tags
 
+      - name: Set up GitVersion
+        uses: gittools/actions/gitversion/setup@v0.10.2
+        with:
+          versionSpec: '5.x'
+
       - name: Run GitVersion
         id: gitversion
-        uses: gittools/actions/gitversion/execute@v0.9.13
+        uses: gittools/actions/gitversion/execute@v0.10.2
         with:
           useConfigFile: true
 
@@ -116,7 +128,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to registry (other)
-        if: not(startsWith(steps.vars.outputs.registry, 'ghcr.io'))
+        if: ${{ !startsWith(steps.vars.outputs.registry, 'ghcr.io') }}
         uses: docker/login-action@v2
         with:
           registry: ${{ steps.vars.outputs.registry }}
