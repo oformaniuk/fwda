@@ -1,12 +1,16 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
 WORKDIR /src
 
-ARG VERSION=latest
+# Use a NuGet-valid version by default (restore evaluates Version properties).
+ARG VERSION=0.0.0
 
 # Copy project file and restore dependencies
 COPY ["Fwda.Proxy/Fwda.Proxy.csproj", "Fwda.Proxy/"]
 COPY ["Fwda.Shared/Fwda.Shared.csproj", "Fwda.Shared/"]
-RUN dotnet restore "Fwda.Proxy/Fwda.Proxy.csproj" -r linux-musl-x64
+RUN dotnet restore "Fwda.Proxy/Fwda.Proxy.csproj" -r linux-musl-x64 \
+    -p:Version=$VERSION \
+    -p:FileVersion=$VERSION \
+    -p:InformationalVersion=$VERSION
 
 # Copy source code and build
 COPY ["Fwda.Proxy/", "Fwda.Proxy/"]
@@ -24,7 +28,7 @@ RUN dotnet publish "Fwda.Proxy/Fwda.Proxy.csproj" -c Debug -r linux-musl-x64 \
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine
 WORKDIR /app
 
-ARG VERSION=latest
+ARG VERSION=0.0.0
 
 # Install curl for health checks and ICU libraries required by .NET 10
 RUN apk add --no-cache curl icu-libs
@@ -38,7 +42,8 @@ RUN mkdir -p /config
 # Run as non-root user for security
 RUN addgroup -g 1000 authuser && \
     adduser -u 1000 -G authuser -s /bin/sh -D authuser && \
-    chown -R authuser:authuser /app /config
+    chown -R authuser:authuser /app /config && \
+    chmod 0755 /config
 
 USER authuser
 

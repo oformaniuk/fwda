@@ -28,12 +28,34 @@ builder.Configuration.AddInMemoryCollection(
     {
         ["ASPNETCORE_FORWARDEDHEADERS_ENABLED"] = "true",
         ["ServiceOptions:Endpoint"] = Environment.GetEnvironmentVariable("SERVICE_ENDPOINT"),
-        ["Kestrel:Endpoints:Http:Url"] = $"{Environment.GetEnvironmentVariable("LISTEN_ADDRESS") ?? "0.0.0.0"}:{Environment.GetEnvironmentVariable("LISTEN_PORT") ?? "5005" }",
+        ["Kestrel:Endpoints:Http:Url"] = $"{Environment.GetEnvironmentVariable("LISTEN_ADDRESS") ?? "0.0.0.0"}:{Environment.GetEnvironmentVariable("LISTEN_PORT") ?? "5005"}",
     }
 );
 
 // Add YAML configuration with hot-reload support
 var configPath = builder.Configuration["ConfigPath"] ?? "/config/config.yaml";
+
+if (!File.Exists(configPath))
+{
+    throw new FileNotFoundException(
+        $"Config file not found at '{configPath}'. " +
+        "Mount it into the container or set ConfigPath."
+    );
+}
+
+try
+{
+    // Quick read check to surface permission issues early with a clear message
+    await using var _ = File.OpenRead(configPath);
+}
+catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+{
+    throw new IOException(
+        $"Config file at '{configPath}' is not readable. " +
+        "If you're bind-mounting from macOS/Windows, try running the container as root or adjust file permissions.",
+        ex
+    );
+}
 
 var deserializer = new DeserializerBuilder()
     .WithTypeConverter(new EncryptedStringConverter())
@@ -84,11 +106,12 @@ if (!string.IsNullOrEmpty(redisConn))
 {
     // Use StackExchange Redis cache
     builder.Services.AddStackExchangeRedisCache(options =>
-    {
-        options.Configuration = redisConn;
-        // Optionally: configure instance name from config
-        options.InstanceName = builder.Configuration["REDIS_INSTANCE_NAME"] ?? Environment.GetEnvironmentVariable("REDIS_INSTANCE_NAME") ?? "FwdaForwardAuth:";
-    });
+        {
+            options.Configuration = redisConn;
+            // Optionally: configure instance name from config
+            options.InstanceName = builder.Configuration["REDIS_INSTANCE_NAME"] ?? Environment.GetEnvironmentVariable("REDIS_INSTANCE_NAME") ?? "FwdaForwardAuth:";
+        }
+    );
 }
 else
 {
@@ -98,13 +121,14 @@ else
 
 // Register the ticket store that persists authentication tickets server-side
 builder.Services.AddSingleton<DistributedCacheTicketStore>(sp =>
-{
-    var cache = sp.GetRequiredService<Microsoft.Extensions.Caching.Distributed.IDistributedCache>();
-    var dataProtection = sp.GetRequiredService<IDataProtectionProvider>();
-    // Use same expiration as session timeout
-    var expiration = TimeSpan.FromMinutes(sp.GetRequiredService<IOptions<AuthOptions>>().Value.SessionTimeoutMinutes);
-    return new DistributedCacheTicketStore(cache, expiration, dataProtection);
-});
+    {
+        var cache = sp.GetRequiredService<Microsoft.Extensions.Caching.Distributed.IDistributedCache>();
+        var dataProtection = sp.GetRequiredService<IDataProtectionProvider>();
+        // Use same expiration as session timeout
+        var expiration = TimeSpan.FromMinutes(sp.GetRequiredService<IOptions<AuthOptions>>().Value.SessionTimeoutMinutes);
+        return new DistributedCacheTicketStore(cache, expiration, dataProtection);
+    }
+);
 
 builder.Services.AddSingleton<ITicketStore>(sp => sp.GetRequiredService<DistributedCacheTicketStore>());
 
@@ -134,7 +158,6 @@ if (builder.Environment.IsDevelopment())
     builder.Logging.AddFilter("Microsoft.AspNetCore.Authentication", LogLevel.Debug);
     builder.Logging.AddFilter("Microsoft.AspNetCore.Authentication.OpenIdConnect", LogLevel.Trace);
 }
-
 
 // Configure cookie authentication
 builder.Services.AddAuthentication(static options =>

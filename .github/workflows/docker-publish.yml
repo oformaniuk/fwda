@@ -119,6 +119,15 @@ jobs:
             exit 1
           fi
 
+      - name: Restore dependencies
+        run: dotnet restore fwda.sln
+
+      - name: Build solution
+        run: dotnet build fwda.sln --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test fwda.sln --configuration Release --no-build --verbosity normal
+
       - name: Login to registry (GHCR)
         if: startsWith(steps.vars.outputs.registry, 'ghcr.io')
         uses: docker/login-action@v2

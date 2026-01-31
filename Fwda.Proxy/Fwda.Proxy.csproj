@@ -4,20 +4,20 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    
+
     <!-- Self-contained deployment with trimming -->
     <PublishTrimmed>true</PublishTrimmed>
     <PublishSingleFile>false</PublishSingleFile>
     <TrimMode>partial</TrimMode>
-    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
-    <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
-    
+    <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+
     <!-- Optimization flags -->
     <InvariantGlobalization>false</InvariantGlobalization>
     <EventSourceSupport>false</EventSourceSupport>
     <HttpActivityPropagationSupport>true</HttpActivityPropagationSupport>
     <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
-    
+
     <!-- Size optimizations -->
     <DebuggerSupport>false</DebuggerSupport>
     <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>
@@ -42,6 +42,7 @@
     <TrimmerRootAssembly Include="YamlDotNet" />
     <TrimmerRootAssembly Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
   </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Fwda.Shared\Fwda.Shared.csproj" />
   </ItemGroup>
