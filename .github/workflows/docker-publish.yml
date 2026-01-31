@@ -1,0 +1,162 @@
+name: Docker Publish
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Optional version to use (overrides tag/sha)'
+        required: false
+      registry:
+        description: 'Optional registry (e.g. ghcr.io/ORG or registry.example.com/ORG)'
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Fetch full git history
+        run: |
+          git fetch --prune --unshallow || true
+          git fetch --tags
+
+      - name: Run GitVersion
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v0.9.13
+        with:
+          useConfigFile: true
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Prepare variables
+        id: vars
+        shell: bash
+        run: |
+          # Determine VERSION: tag (strip leading v) -> workflow input -> latest on main -> short sha
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+            TAG=${TAG#v}
+            VERSION="$TAG"
+          elif [[ "${{ github.event.inputs.version }}" != "" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ steps.gitversion.outputs.SemVer }}" != "" ]]; then
+            # Use GitVersion's SemVer when available (fallback)
+            VERSION="${{ steps.gitversion.outputs.SemVer }}"
+          elif [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            VERSION="latest"
+          else
+            VERSION=${GITHUB_SHA::8}
+          fi
+
+          if [[ "${{ github.event.inputs.registry }}" != "" ]]; then
+            REGISTRY="${{ github.event.inputs.registry }}"
+          else
+            REGISTRY="ghcr.io/${GITHUB_REPOSITORY_OWNER}"
+          fi
+
+          # Should we also tag as :latest? true for main branch and tag pushes
+          if [[ "${GITHUB_REF}" == "refs/heads/main" || "${GITHUB_REF}" == refs/tags/* ]]; then
+            SHOULD_LATEST=true
+          else
+            SHOULD_LATEST=false
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "registry=$REGISTRY" >> $GITHUB_OUTPUT
+          echo "should_latest=$SHOULD_LATEST" >> $GITHUB_OUTPUT
+
+      - name: Validate VERSION is semver (skip for 'latest' or short SHA)
+        id: validate_version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.vars.outputs.version }}"
+          echo "Computed VERSION=$VERSION"
+
+          # Skip validation for latest
+          if [[ "$VERSION" == "latest" ]]; then
+            echo "Skipping semver validation for 'latest'"
+            exit 0
+          fi
+
+          # Skip validation for short commit SHA (8 hex chars)
+          if [[ "$VERSION" =~ ^[0-9a-f]{8}$ ]]; then
+            echo "Skipping semver validation for short commit SHA"
+            exit 0
+          fi
+
+          # Semver regex: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]
+          if [[ "$VERSION" =~ ^([0-9]+)\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "VERSION is valid semver"
+            exit 0
+          else
+            echo "ERROR: VERSION '$VERSION' is not valid semver (expected MAJOR.MINOR.PATCH, optional -PRERELEASE and +BUILD)"
+            exit 1
+          fi
+
+      - name: Login to registry (GHCR)
+        if: startsWith(steps.vars.outputs.registry, 'ghcr.io')
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ steps.vars.outputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to registry (other)
+        if: not(startsWith(steps.vars.outputs.registry, 'ghcr.io'))
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ steps.vars.outputs.registry }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build & push proxy image (version tag)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Fwda.Proxy/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ steps.vars.outputs.registry }}/fwda:${{ steps.vars.outputs.version }}
+          build-args: |
+            VERSION=${{ steps.vars.outputs.version }}
+          cache-from: type=registry,ref=${{ steps.vars.outputs.registry }}/fwda:buildcache
+          cache-to: type=registry,mode=max,ref=${{ steps.vars.outputs.registry }}/fwda:buildcache
+
+      - name: Create multi-arch proxy :latest manifest (main or tag)
+        if: ${{ steps.vars.outputs.should_latest == 'true' }}
+        run: |
+          docker buildx imagetools create --tag ${{ steps.vars.outputs.registry }}/fwda:latest ${{ steps.vars.outputs.registry }}/fwda:${{ steps.vars.outputs.version }}
+
+      - name: Build & push watcher image (version tag)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Fwda.Watcher/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ steps.vars.outputs.registry }}/fwda-watcher:${{ steps.vars.outputs.version }}
+          build-args: |
+            VERSION=${{ steps.vars.outputs.version }}
+          cache-from: type=registry,ref=${{ steps.vars.outputs.registry }}/fwda-watcher:buildcache
+          cache-to: type=registry,mode=max,ref=${{ steps.vars.outputs.registry }}/fwda-watcher:buildcache
+
+      - name: Create multi-arch watcher :latest manifest (main or tag)
+        if: ${{ steps.vars.outputs.should_latest == 'true' }}
+        run: |
+          docker buildx imagetools create --tag ${{ steps.vars.outputs.registry }}/fwda-watcher:latest ${{ steps.vars.outputs.registry }}/fwda-watcher:${{ steps.vars.outputs.version }}
