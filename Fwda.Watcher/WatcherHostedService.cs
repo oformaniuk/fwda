@@ -111,21 +111,22 @@ public partial class WatcherHostedService(
                 await _restartSemaphore.WaitAsync(token);
                 try
                 {
-                    var containers = await client.Containers.ListContainersAsync(
+                    // Retrieve all containers and filter in managed code to ensure we only
+                    // match the container name exactly as provided in _options.Container.
+                    var containers = (await client.Containers.ListContainersAsync(
                         new ContainersListParameters
                         {
-                            Filters = new Dictionary<string, IDictionary<string, bool>>
-                            {
-                                {
-                                    "name", new Dictionary<string, bool>
-                                    {
-                                        { _options.Container, true }
-                                    }
-                                }
-                            }
+                            All = true
                         },
                         token
-                    );
+                    )).AsEnumerable();
+
+                    // Docker returns container names with a leading '/'. Trim it and compare
+                    // using ordinal comparison to avoid partial or culture-sensitive matches.
+                    containers = containers
+                        .Where(c => (c.Names ?? Array.Empty<string>())
+                            .Any(n => n.TrimStart('/').Equals(_options.Container, StringComparison.Ordinal))
+                        );
 
                     foreach (var container in containers)
                     {
