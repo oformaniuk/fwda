@@ -84,6 +84,91 @@ namespace Fwda.Proxy.Authentication
                             logger.LogOnMessageReceivedForPortalPortalProcessingCallback(portalName);
                             return Task.CompletedTask;
                         },
+                        // Prefer X-Forwarded headers (host/proto/prefix) when present to build the redirect_uri;
+                        // otherwise fall back to the request's Host/Scheme/PathBase. This works well when
+                        // the app is behind a proxy that sets these headers (preferred) but still handles
+                        // direct connections to the app.
+                        OnRedirectToIdentityProvider = context =>
+                        {
+                            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                            var original = context.ProtocolMessage.RedirectUri ?? string.Empty;
+
+                            var req = context.Request;
+                            var headers = req.Headers;
+
+                            // Prefer X-Forwarded-Proto and X-Forwarded-Host (take first value if comma-separated)
+                            string? xfProto = headers.ContainsKey("X-Forwarded-Proto") ? headers["X-Forwarded-Proto"].ToString().Split(',')[0].Trim() : null;
+                            string? xfHost = headers.ContainsKey("X-Forwarded-Host") ? headers["X-Forwarded-Host"].ToString().Split(',')[0].Trim() : null;
+                            string? xfPrefix = headers.ContainsKey("X-Forwarded-Prefix") ? headers["X-Forwarded-Prefix"].ToString().Split(',')[0].Trim() : null;
+
+                            // Support the standard Forwarded header (RFC 7239) as an additional fallback
+                            if (string.IsNullOrEmpty(xfProto) || string.IsNullOrEmpty(xfHost))
+                            {
+                                if (headers.ContainsKey("Forwarded"))
+                                {
+                                    // Take the first forwarded value: "for=..., proto=https; host=example.com"
+                                    var first = headers["Forwarded"].ToString().Split(',')[0];
+                                    var parts = first.Split(';', StringSplitOptions.RemoveEmptyEntries);
+                                    foreach (var p in parts)
+                                    {
+                                        var pair = p.Split('=', 2, StringSplitOptions.RemoveEmptyEntries);
+                                        if (pair.Length != 2) continue;
+                                        var key = pair[0].Trim();
+                                        var val = pair[1].Trim().Trim('"');
+
+                                        if (string.Equals(key, "proto", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(xfProto))
+                                        {
+                                            xfProto = val;
+                                        }
+
+                                        if (string.Equals(key, "host", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(xfHost))
+                                        {
+                                            xfHost = val;
+                                        }
+                                    }
+                                }
+                            }
+
+                            var scheme = !string.IsNullOrEmpty(xfProto) ? xfProto : req.Scheme;
+                            var hostHeader = !string.IsNullOrEmpty(xfHost) ? xfHost : (req.Host.HasValue ? req.Host.Value : string.Empty);
+                            var basePath = !string.IsNullOrEmpty(xfPrefix) ? xfPrefix : (req.PathBase.HasValue ? req.PathBase.Value : string.Empty);
+
+                            // Normalize basePath (remove trailing slash if present) to avoid '//' when concatenating
+                            if (!string.IsNullOrEmpty(basePath) && basePath.EndsWith('/'))
+                            {
+                                basePath = basePath.TrimEnd('/');
+                            }
+
+                            var callback = options.CallbackPath.HasValue ? options.CallbackPath.Value : "/signin-oidc";
+
+                            // Parse hostHeader into HostString to extract host and optional port safely
+                            var hostString = new HostString(hostHeader);
+
+                            var uriBuilder = new UriBuilder
+                            {
+                                Scheme = scheme,
+                                Host = hostString.Host ?? string.Empty,
+                                Path = string.IsNullOrEmpty(basePath) ? callback : (basePath + callback)
+                            };
+
+                            if (hostString.Port.HasValue)
+                            {
+                                uriBuilder.Port = hostString.Port.Value;
+                            }
+                            else
+                            {
+                                // If no explicit port in header, ensure default ports are omitted
+                                uriBuilder.Port = -1;
+                            }
+
+                            var redirectUri = uriBuilder.Uri.GetComponents(UriComponents.SchemeAndServer | UriComponents.PathAndQuery, UriFormat.UriEscaped);
+
+                            context.ProtocolMessage.RedirectUri = redirectUri;
+
+                            logger.LogOnRedirectToIdentityProviderForPortalPortalOriginalOriginalModified(portalName, original, redirectUri);
+
+                            return Task.CompletedTask;
+                        },
                         OnTokenValidated = context =>
                         {
                             // Reduce the claims persisted into the cookie by creating a minimal identity.

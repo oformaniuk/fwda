@@ -38,11 +38,12 @@ COPY --from=build /app/publish .
 
 # Create config directory
 RUN mkdir -p /config
+RUN mkdir -p /keys
 
 # Run as non-root user for security
 RUN addgroup -g 1000 authuser && \
     adduser -u 1000 -G authuser -s /bin/sh -D authuser && \
-    chown -R authuser:authuser /app /config && \
+    chown -R authuser:authuser /app /config /keys && \
     chmod 0755 /config
 
 USER authuser

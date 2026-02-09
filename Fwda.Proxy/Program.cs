@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Logging;
 using StackExchange.Redis;
 using YamlDotNet.Serialization;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,7 +29,7 @@ builder.Configuration.AddInMemoryCollection(
     {
         ["ASPNETCORE_FORWARDEDHEADERS_ENABLED"] = "true",
         ["ServiceOptions:Endpoint"] = Environment.GetEnvironmentVariable("SERVICE_ENDPOINT"),
-        ["Kestrel:Endpoints:Http:Url"] = $"{Environment.GetEnvironmentVariable("LISTEN_ADDRESS") ?? "0.0.0.0"}:{Environment.GetEnvironmentVariable("LISTEN_PORT") ?? "5005"}",
+        ["Kestrel:Endpoints:Http:Url"] = $"http://{Environment.GetEnvironmentVariable("LISTEN_ADDRESS") ?? "0.0.0.0"}:{Environment.GetEnvironmentVariable("LISTEN_PORT") ?? "5005"}",
     }
 );
 
@@ -171,6 +172,21 @@ builder.Services.AddAuthentication(static options =>
 
 var app = builder.Build();
 
+// Apply forwarded headers early so Request.Scheme and other request properties reflect
+// the original client protocol when the app sits behind a TLS-terminating proxy.
+var forwardedHeadersEnabled = builder.Configuration["ASPNETCORE_FORWARDEDHEADERS_ENABLED"] == "true";
+if (forwardedHeadersEnabled)
+{
+    var forwardedOptions = new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+    };
+    
+    // In containerized/proxy setups accept forwarded headers from any proxy
+    forwardedOptions.KnownNetworks.Clear();
+    forwardedOptions.KnownProxies.Clear();
+    app.UseForwardedHeaders(forwardedOptions);
+}
 // Force /auth responses to stay 401 (never redirect)
 app.Use(async (context, next) =>
     {
