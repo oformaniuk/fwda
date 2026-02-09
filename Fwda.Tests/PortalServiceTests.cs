@@ -38,11 +38,11 @@ public class PortalServiceTests
         // Arrange
         var labels = new Dictionary<string, string>
         {
-            ["fwda.auth.portal.myportal.oidc.issuer"] = "https://issuer.com",
-            ["fwda.auth.portal.myportal.oidc.clientId"] = "clientId",
-            ["fwda.auth.portal.myportal.oidc.clientSecret"] = "secret",
-            ["fwda.auth.portal.myportal.hostname"] = "myportal.com",
-            ["fwda.auth.portal.myportal.display"] = "My Portal"
+            ["fwda.auth.myportal.oidc.issuer"] = "https://issuer.com",
+            ["fwda.auth.myportal.oidc.client_id"] = "clientId",
+            ["fwda.auth.myportal.oidc.client_secret"] = "secret",
+            ["fwda.auth.myportal.hostname"] = "myportal.com",
+            ["fwda.auth.myportal.display"] = "My Portal"
         };
         var containers = new List<ContainerListResponse>
         {
@@ -74,13 +74,13 @@ public class PortalServiceTests
         // Arrange
         var validLabels = new Dictionary<string, string>
         {
-            ["fwda.auth.portal.valid.oidc.issuer"] = "https://issuer.com",
-            ["fwda.auth.portal.valid.oidc.clientId"] = "clientId",
-            ["fwda.auth.portal.valid.oidc.clientSecret"] = "secret"
+            ["fwda.auth.valid.oidc.issuer"] = "https://issuer.com",
+            ["fwda.auth.valid.oidc.client_id"] = "clientId",
+            ["fwda.auth.valid.oidc.client_secret"] = "secret"
         };
         var invalidLabels = new Dictionary<string, string>
         {
-            ["fwda.auth.portal.invalid.oidc.issuer"] = "https://issuer.com",
+            ["fwda.auth.invalid.oidc.issuer"] = "https://issuer.com",
             // Missing clientId and clientSecret
         };
         var containers = new List<ContainerListResponse>
@@ -107,10 +107,10 @@ public class PortalServiceTests
         // Arrange
         var labels = new Dictionary<string, string>
         {
-            ["fwda.auth.portal.portal1.oidc.issuer"] = "value1",
-            ["fwda.auth.portal.portal2.oidc.clientId"] = "value2",
-            ["fwda.auth.portal.portal1.hostname"] = "value3",
-            ["fwda.auth.other.label"] = "value4"
+            ["fwda.auth.portal1.oidc.issuer"] = "value1",
+            ["fwda.auth.portal2.oidc.client_id"] = "value2",
+            ["fwda.auth.portal1.hostname"] = "value3",
+            ["fwda1.other.label"] = "value4"
         };
         var service = new PortalService(_dockerClient, _logger, _options);
 
@@ -129,12 +129,12 @@ public class PortalServiceTests
         // Arrange
         var labels = new Dictionary<string, string>
         {
-            ["fwda.auth.portal.myportal.display"] = "Display Name",
-            ["fwda.auth.portal.myportal.hostname"] = "hostname.com",
-            ["fwda.auth.portal.myportal.oidc.issuer"] = "https://issuer.com",
-            ["fwda.auth.portal.myportal.oidc.clientId"] = "clientId",
-            ["fwda.auth.portal.myportal.oidc.clientSecret"] = "secret",
-            ["fwda.auth.portal.myportal.oidc.scopes"] = "openid, profile"
+            ["fwda.auth.myportal.display"] = "Display Name",
+            ["fwda.auth.myportal.hostname"] = "hostname.com",
+            ["fwda.auth.myportal.oidc.issuer"] = "https://issuer.com",
+            ["fwda.auth.myportal.oidc.client_id"] = "clientId",
+            ["fwda.auth.myportal.oidc.client_secret"] = "secret",
+            ["fwda.auth.myportal.oidc.scopes"] = "openid, profile"
         };
         var service = new PortalService(_dockerClient, _logger, _options);
 
@@ -157,9 +157,9 @@ public class PortalServiceTests
         // Arrange
         var labels = new Dictionary<string, string>
         {
-            ["fwda.auth.portal.myportal.oidc.issuer"] = "https://issuer.com",
-            ["fwda.auth.portal.myportal.oidc.clientId"] = "clientId",
-            ["fwda.auth.portal.myportal.oidc.clientSecret"] = "secret"
+            ["fwda.auth.myportal.oidc.issuer"] = "https://issuer.com",
+            ["fwda.auth.myportal.oidc.client_id"] = "clientId",
+            ["fwda.auth.myportal.oidc.client_secret"] = "secret"
         };
         var service = new PortalService(_dockerClient, _logger, _options);
 

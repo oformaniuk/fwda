@@ -40,7 +40,7 @@ namespace Fwda.Watcher
 
         internal PortalOptions GetPortalConfigFromLabels(IDictionary<string, string> labels, string portalName)
         {
-            var prefix = $"{_options.LabelPrefix}.portal.{portalName}.";
+            var prefix = $"{_options.LabelPrefix}.{portalName}.";
 
             var hostname = GetLabel($"{prefix}hostname", portalName);
             var config = new PortalOptions
@@ -55,8 +55,8 @@ namespace Fwda.Watcher
                 Oidc = new OidcOptions
                 {
                     Issuer = ExpandEnvVars(GetLabel($"{prefix}oidc.issuer")),
-                    ClientId = ExpandEnvVars(GetLabel($"{prefix}oidc.clientId")),
-                    ClientSecret = ExpandEnvVars(GetLabel($"{prefix}oidc.clientSecret")),
+                    ClientId = ExpandEnvVars(GetLabel($"{prefix}oidc.client_id")),
+                    ClientSecret = ExpandEnvVars(GetLabel($"{prefix}oidc.client_secret")),
                     Scopes = ExpandEnvVars(GetLabel($"{prefix}oidc.scopes", "openid,profile,email")).Split(',').Select(s => s.Trim()).ToList()
                 }
             };
@@ -83,7 +83,7 @@ namespace Fwda.Watcher
         internal IEnumerable<string> ExtractPortalNames(IDictionary<string, string> labels)
         {
             var portalNames = new HashSet<string>();
-            var prefix = $"{_options.LabelPrefix}.portal.";
+            var prefix = $"{_options.LabelPrefix}.";
             foreach (var key in labels.Keys)
             {
                 if (key.StartsWith(prefix))

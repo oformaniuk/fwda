@@ -130,6 +130,8 @@ public partial class WatcherHostedService(
 
                     foreach (var container in containers)
                     {
+                        if(container.State == "exited") continue;
+                        
                         await client.Containers.RestartContainerAsync(container.ID, new ContainerRestartParameters(), token);
                     }
                 }
